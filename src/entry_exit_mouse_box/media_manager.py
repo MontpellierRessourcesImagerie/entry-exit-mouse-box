@@ -1,5 +1,6 @@
 import cv2
 import os
+import tifffile
 
 
 def properties_match(p1, p2):
@@ -199,7 +200,7 @@ class MediaManager:
             if not ret:
                 print("ERROR: Failed to read frame.")
                 return None
-
+            
             if target_layer in self.viewer.layers:
                 layer = self.viewer.layers[target_layer]
                 layer.data = frame

@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QSl
                              QGroupBox, QLabel, QHeaderView, QFileDialog, QFrame, QCheckBox)
 
 import cv2
+import shutil
 from PyQt5.QtGui import QFont, QColor, QDoubleValidator
 from qtpy.QtCore import QThread, Qt, Signal, Slot
 
@@ -24,6 +25,7 @@ import napari
 from entry_exit_mouse_box.media_manager import MediaManager
 from entry_exit_mouse_box.video_mean_processor import QtWorkerVMP
 from entry_exit_mouse_box.mask_from_video import QtWorkerMFV
+from entry_exit_mouse_box.convert_format import QtWorkerC2A
 from entry_exit_mouse_box.measures import QtWorkerMVP
 from entry_exit_mouse_box.utils import setup_logger, smooth_path_2d, apply_lut
 from entry_exit_mouse_box.results_table import SessionsResultsTable, FrameWiseResultsTable
@@ -169,6 +171,12 @@ class MouseInOutWidget(QWidget):
         self.properties_display.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         self.properties_display.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.properties_display)
+
+        # Dump temporary files button
+        self.dump_button = QPushButton("🗑️ Dump temp files", self)
+        self.dump_button.setFont(FONT)
+        self.dump_button.clicked.connect(self.dump_temp_files)
+        layout.addWidget(self.dump_button)
 
         self.layout.addWidget(group_box)
 
@@ -350,6 +358,8 @@ class MouseInOutWidget(QWidget):
         if not self.viewer.layers.selection.active:
             return
         source = self.viewer.layers.selection.active
+        if source.name in self.boxes:
+            return
         if 'shape_type' not in dir(source):
             return
         shape_types = source.shape_type
@@ -404,6 +414,11 @@ class MouseInOutWidget(QWidget):
             self.logger.error("No layer selected.")
             return
         
+        if self.viewer.layers.selection.active.name in self.boxes:
+            show_error("A box layer is selected.")
+            self.logger.error("A box layer is selected.")
+            return
+
         # The active layer must be the shape layer, containing a polygon around the head of a mouse.
         active_layer = self.viewer.layers.selection.active
         active_layer.scale = self.viewer.layers[MEDIA_LAYER].scale
@@ -463,7 +478,7 @@ class MouseInOutWidget(QWidget):
                 opacity=0.8
             )
 
-    def toggle_inputs(self, t):
+    def set_active_ui(self, t):
         """
         Used to disable the inputs (buttons and text fields) when a long process is running.
 
@@ -502,6 +517,7 @@ class MouseInOutWidget(QWidget):
         self.calibrationButton.setEnabled(t)
         self.minutesSpin.setEnabled(t)
         self.secondsSpin.setEnabled(t)
+        self.dump_button.setEnabled(t)
 
     def switch_log_file(self, new_file_name):
         """
@@ -555,12 +571,20 @@ class MouseInOutWidget(QWidget):
         else:
             color = k
         
-        if color.isValid():
-            button.setStyleSheet(f'background-color: {color.name()};')
-            button.setText(color.name())
-            nb = len(self.viewer.layers[self.boxes[row]].edge_color)
-            self.viewer.layers[self.boxes[row]].edge_color = [color.name() for i in range(nb)]
-            self.viewer.layers[self.boxes[row]].current_edge_color = color.name()
+        if not color.isValid():
+            return
+        button.setStyleSheet(f'background-color: {color.name()};')
+        button.setText(color.name())
+        nb = len(self.viewer.layers[self.boxes[row]].edge_color)
+        self.viewer.layers[self.boxes[row]].edge_color = [color.name() for i in range(nb)]
+        self.viewer.layers[self.boxes[row]].current_edge_color = color.name()
+        if not MICE_LABELS_LAYER in self.viewer.layers:
+            return
+        apply_lut(
+            self.viewer.layers[MICE_LABELS_LAYER], 
+            self.boxes, 
+            self.extract_classes()
+        )
 
     def add_row(self):
         if self.mm.get_n_sources() == 0:
@@ -597,7 +621,7 @@ class MouseInOutWidget(QWidget):
             del(self.start[row_count-1])
 
     def extract_measures(self):
-        self.toggle_inputs(False)
+        self.set_active_ui(False)
         show_info("Extracting measures...")
         self.logger.info("Extracting measures...")
         self.pbr = progress(total=0)
@@ -622,7 +646,7 @@ class MouseInOutWidget(QWidget):
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
-        self.toggle_inputs(True)
+        self.set_active_ui(True)
 
         self.visibility   = visibility
         np.save(os.path.join(self.temp_dir, "visibility.npy"), visibility)
@@ -636,7 +660,7 @@ class MouseInOutWidget(QWidget):
         self.measures_ready.emit()
 
     def export_results(self):
-        colors = np.array([self.viewer.layers[n].edge_color[0]*255 for n in self.boxes])
+        colors = np.array([self.viewer.layers[n].edge_color[0]*255 for n in self.boxes], dtype=int)
 
         # Centroids, visibility, name of boxes
         fwrt = FrameWiseResultsTable((
@@ -697,12 +721,17 @@ class MouseInOutWidget(QWidget):
         
         if not os.path.isdir(root):
             os.mkdir(root)
-        else:
-            show_warning(f"Directory '{root}' already exists. All its content will be deleted.")
-            for f in os.listdir(root):
-                os.remove(os.path.join(root, f))
         
         self.temp_dir = root
+
+    def dump_temp_files(self):
+        if self.temp_dir is None:
+            return
+        if not os.path.isdir(self.temp_dir):
+            return
+        shutil.rmtree(self.temp_dir)
+        self.clear_state()
+        self.logger.info("Temporary files deleted.")
 
     def update_boxes(self):
         # Ajouter un layer sur lequel on écrit la durée de la session.
@@ -833,10 +862,32 @@ class MouseInOutWidget(QWidget):
         if not file_path: 
             print("No file selected.")
             return
-        self.set_media(file_path)
-        
+        self.launch_convert(file_path)
+    
+    def launch_convert(self, file_path):
+        self.create_temp_dir(os.path.join(
+            os.path.dirname(file_path), 
+            ".".join(os.path.basename(file_path).split(".")[:-1]) + ".tmp"
+        ))
+        self.set_active_ui(False)
+        show_info("Converting video...")
+        self.logger.info("Converting video...")
+        self.pbr = progress(total=0)
+        self.pbr.set_description("Converting video...")
+        self.thread = QThread()
+        self.c2a = QtWorkerC2A(file_path, os.path.join(self.temp_dir, os.path.basename(file_path)))
+        self.c2a.moveToThread(self.thread)
+        self.c2a.file_ready.connect(self.set_media)
+        self.thread.started.connect(self.c2a.run)
+        self.thread.start()
+
     def set_media(self, file_path):
-        
+        self.pbr.close()
+        self.thread.quit()
+        self.thread.wait()
+        self.thread.deleteLater()
+        self.set_active_ui(True)
+
         def bgr2rgb(frame):
             return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
@@ -856,11 +907,6 @@ class MouseInOutWidget(QWidget):
         
         self.logger.info(f"File opened: '{file_path}'")
         self.logger.info("Properties: " + str(properties))
-
-        self.create_temp_dir(os.path.join(
-            os.path.dirname(file_path), 
-            ".".join(os.path.basename(file_path).split(".")[:-1]) + ".tmp"
-        ))
         return 0
     
     def update_playback_info(self):
@@ -873,7 +919,7 @@ class MouseInOutWidget(QWidget):
         d = (nf / fps) if nf > 0 else 0
 
         self.info_label.setText(f"{round(t, 2)} sec")
-        self.properties_display.setText(f"{w}x{h} ({round(fps, 2)} FPS) ↦ {round(d, 2)}s")
+        self.properties_display.setText(f"{w}x{h} ({round(fps, 4)} FPS) ↦ {round(d, 4)}s")
     
     def set_frame(self, n):
         if not self.mm.active:
@@ -904,7 +950,7 @@ class MouseInOutWidget(QWidget):
         src = self.mm.get_source_by_name(MEDIA_LAYER)
         src_path = src[0]
 
-        self.toggle_inputs(False)
+        self.set_active_ui(False)
         show_info("Extracting background...")
         self.logger.info("Extracting background...")
         self.pbr = progress(total=0)
@@ -935,7 +981,7 @@ class MouseInOutWidget(QWidget):
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
-        self.toggle_inputs(True)
+        self.set_active_ui(True)
         self.background_ready.emit()
         
     def extract_classes(self):
@@ -1009,7 +1055,7 @@ class MouseInOutWidget(QWidget):
             del self.viewer.layers[TS_PREVIEW_LAYER]
 
         # Launching the worker...
-        self.toggle_inputs(False)
+        self.set_active_ui(False)
         show_info("Building mice labels...")
         self.logger.info("Building mice labels with threshold at: " + str(self.threshold.value()))
         self.logger.info("Building mice labels from frame: " + str(self.start))
@@ -1046,14 +1092,14 @@ class MouseInOutWidget(QWidget):
         )
         self.viewer.layers[MEDIA_LAYER].opacity = 0.3
 
-        self.toggle_inputs(False)
+        self.set_active_ui(False)
         self.logger.info("Mice labels built.")
         show_info("Mice labels built!")
         self.pbr.close()
         self.thread.quit()
         self.thread.wait()
         self.thread.deleteLater()
-        self.toggle_inputs(True)
+        self.set_active_ui(True)
         self.tracking_ready.emit()
 
     def dump_table(self):

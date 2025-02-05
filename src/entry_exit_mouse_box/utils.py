@@ -41,7 +41,7 @@ def apply_lut(tags, to_pass, classes):
         tpl = [float(color[i])/255.0 for i in range(3)] + [1.0]
         lut[index+1] = tuple(tpl)
 
-    tags.color = lut
+    tags.colormap = lut
 
 
 def merge_close_points(path, min_distance, dot_threshold=-0.7):
