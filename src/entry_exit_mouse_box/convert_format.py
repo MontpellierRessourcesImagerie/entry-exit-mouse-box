@@ -18,6 +18,10 @@ class QtWorkerC2A(QObject):
         print(f"The file will be written at: {self.out_path}")
 
     def convert_to_avi(self):
+        if os.path.isfile(self.out_path):
+            print(f"File {self.out_path} already exists.")
+            return
+        
         cap = cv2.VideoCapture(self.in_path)
         if not cap.isOpened():
             return
@@ -36,7 +40,6 @@ class QtWorkerC2A(QObject):
             ret, frame = cap.read()
             if not ret:
                 break
-            # printing percentage
             if i % 100 == 0:
                 print(f"{(i/n_frames)*100:.2f}%")
             i += 1

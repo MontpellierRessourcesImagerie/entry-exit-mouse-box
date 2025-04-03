@@ -71,22 +71,22 @@ class ResultsTable(QMainWindow):
         if not fileName:
             print("No file selected")
         
-        self.export_table_to_csv(self.table, fileName)
+        self.export_table_to_csv(fileName)
 
-    def export_table_to_csv(self, tableWidget: QTableWidget, filename: str):
+    def export_table_to_csv(self, filename: str):
         # Open a file in write mode
         with open(filename, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file, delimiter=';')
             
             # Writing headers (optional)
-            headers = [tableWidget.horizontalHeaderItem(i).text() if tableWidget.horizontalHeaderItem(i) is not None else "" for i in range(tableWidget.columnCount())]
+            headers = [self.table.horizontalHeaderItem(i).text() if self.table.horizontalHeaderItem(i) is not None else "" for i in range(self.table.columnCount())]
             writer.writerow(headers)
             
             # Writing data
-            for row in range(tableWidget.rowCount()):
+            for row in range(self.table.rowCount()):
                 row_data = []
-                for column in range(tableWidget.columnCount()):
-                    item = tableWidget.item(row, column)
+                for column in range(self.table.columnCount()):
+                    item = self.table.item(row, column)
                     # Check if the cell is not empty
                     if item is not None:
                         row_data.append(item.text())
@@ -165,12 +165,12 @@ class SessionsResultsTable(ResultsTable):
         print("Sessions table created")
 
     def set_data(self, data):
-        colors_raw, in_out_count, sessions, box_names, visibility, unit = data
+        colors_raw, in_out_count, sessions, box_names, visibility, unit, fps = data
         colors = [QColor(int(colors_raw[box_index][0]), int(colors_raw[box_index][1]), int(colors_raw[box_index][2]), 100) for box_index in range(len(box_names))]
         
         # Setting headers for each box.
-        # First frame of the session, duration of the session, number of go in/go out for this box
-        headers = ['First frame', 'Duration (s)', f'Distance ({unit})']
+        # Time start of the session, duration of the session, number of go in/go out for this box
+        headers = ['Time start (s)', 'Duration (s)', f'Distance ({unit})']
         status  = ['V', 'H']
         last    = '#I/O'
         nHeaders = len(box_names) * len(headers) * len(status) + len(box_names)
@@ -230,7 +230,7 @@ class SessionsResultsTable(ResultsTable):
                 duration = round(session[1], 2)
                 col_index = nBoxHeaders * box_idx + shift * len(headers)
                 
-                item = QTableWidgetItem(str(f_frame))
+                item = QTableWidgetItem(str(int(f_frame/fps)))
                 item.setBackground(color)
                 self.table.setItem(last_pos_by_column[col_index], col_index, item)
                 

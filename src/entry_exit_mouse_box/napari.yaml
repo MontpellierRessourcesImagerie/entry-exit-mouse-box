@@ -18,6 +18,9 @@ contributions:
     - id: entry-exit-mouse-box.get_reader
       python_name: entry_exit_mouse_box._reader:napari_get_reader
       title: Open data with Entry/Exit mouse in box
+    - id: entry-exit-mouse-box.video_converter_widget
+      python_name: entry_exit_mouse_box:VideoConverterWidget
+      title: Video converter widget
     - id: entry-exit-mouse-box.mouse_in_out_widget
       python_name: entry_exit_mouse_box:MouseInOutWidget
       title: Mouse in/out widget
@@ -26,5 +29,7 @@ contributions:
       accepts_directories: false
       filename_patterns: ['*.mp4', '*.avi', '*.mov', '*flv']
   widgets:
+    - command: entry-exit-mouse-box.video_converter_widget
+      display_name: Video Converter
     - command: entry-exit-mouse-box.mouse_in_out_widget
       display_name: Mouse I/O Box

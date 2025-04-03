@@ -555,13 +555,13 @@ class MouseInOutWidget(QWidget):
         """
         if self.boxes[item.row()] not in self.viewer.layers: # The line is being added
             return
-        
         new_name = item.text()
+        if self.boxes[item.row()] == new_name:
+            return
         if len(new_name) <= 1:
             self.logger.warning("The name of the box is too short.")
             new_name = f"Box-{len(self.boxes)}"
-
-        self.logger.info(f"Box {item.row()} renamed to: {new_name}")
+        self.logger.info(f"The box '{self.boxes[item.row()]}' ({item.row()}) was renamed '{new_name}'")
         self.viewer.layers[self.boxes[item.row()]].name = new_name
         self.boxes[item.row()] = new_name
     
@@ -650,7 +650,7 @@ class MouseInOutWidget(QWidget):
 
         self.visibility   = visibility
         np.save(os.path.join(self.temp_dir, "visibility.npy"), visibility)
-        self.in_out_count = np.squeeze(in_out_count)
+        self.in_out_count = in_out_count
         np.save(os.path.join(self.temp_dir, "in_out_count.npy"), in_out_count)
         self.sessions     = sessions
         np.save(os.path.join(self.temp_dir, "sessions.npy"), sessions)
@@ -670,6 +670,7 @@ class MouseInOutWidget(QWidget):
             self.boxes
         ))
         fwrt.set_exp_name("frames-" + os.path.basename(self.mm.get_source_by_name(MEDIA_LAYER)[0]))
+        fwrt.export_table_to_csv(os.path.join(self.temp_dir, "frame_wise_results.csv"))
         fwrt.show()
         self.frames_results.append(fwrt)
 
@@ -682,9 +683,11 @@ class MouseInOutWidget(QWidget):
             sessions, 
             self.boxes, 
             self.visibility,
-            unit
+            unit,
+            self.mm.get_fps()
         ))
         srt.set_exp_name("sessions-" + os.path.basename(self.mm.get_source_by_name(MEDIA_LAYER)[0]))
+        srt.export_table_to_csv(os.path.join(self.temp_dir, "sessions_results.csv"))
         srt.show()
         self.sessions_results.append(srt)
 
@@ -729,7 +732,10 @@ class MouseInOutWidget(QWidget):
             return
         if not os.path.isdir(self.temp_dir):
             return
-        shutil.rmtree(self.temp_dir)
+        for item in os.listdir(self.temp_dir):
+            full_path = os.path.join(self.temp_dir, item)
+            if item.endswith((".npy", ".tif", ".csv", "mask.avi")):
+                os.remove(full_path)
         self.clear_state()
         self.logger.info("Temporary files deleted.")
 
@@ -769,7 +775,7 @@ class MouseInOutWidget(QWidget):
                 size=6
             )
         layer = self.viewer.layers[CENTOIDS_LAYER]
-        layer.edge_color = '#00000000'
+        layer.border_color = '#00000000'
         colors = []
         for box in range(len(self.boxes)):
             colors.append("#ff0000ff" if self.visibility[box, self.mm.current_frame] == 1 else "#00000000")

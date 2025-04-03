@@ -70,7 +70,7 @@ class MiceVisibilityProcessor(object):
 
         self.visibility   = np.zeros((self.n_boxes, self.ttl_frames), np.int8)
         self.centroids    = np.zeros((self.ttl_frames, self.n_boxes, 2), float)
-        self.in_out_count = np.zeros((self.n_boxes, 1), np.uint16)
+        self.in_out_count = np.zeros(self.n_boxes, np.uint16)
         self.sessions     = None
 
         self.centroids.fill(-1.0)
