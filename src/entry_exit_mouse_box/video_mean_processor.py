@@ -25,9 +25,13 @@ class VideoMeanProcessor(object):
 
     def read_frames(self, frames_count=32):
         frames = []
+        skip = 3
         with self.lock: 
-            for _ in range(frames_count):
-                ret, frame = self.video.read()
+            for i in range(frames_count):
+                if i % skip != 0:
+                    ret = self.video.grab()
+                else:
+                    ret, frame = self.video.read()
                 if not ret:
                     break
                 frames.append(frame)

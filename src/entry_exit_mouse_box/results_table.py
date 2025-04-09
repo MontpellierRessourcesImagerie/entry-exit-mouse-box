@@ -3,7 +3,7 @@ from qtpy.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QApplication, QMa
 from PyQt5.QtGui import QColor, QFont
 import numpy as np
 import csv
-
+import math
 
 class ResultsTable(QMainWindow):
     def __init__(self, data, name='Data Table', parent=None):
@@ -165,18 +165,19 @@ class SessionsResultsTable(ResultsTable):
         print("Sessions table created")
 
     def set_data(self, data):
-        colors_raw, in_out_count, sessions, box_names, visibility, unit, fps = data
+        colors_raw, sessions, box_names, visibility, unit, fps = data
         colors = [QColor(int(colors_raw[box_index][0]), int(colors_raw[box_index][1]), int(colors_raw[box_index][2]), 100) for box_index in range(len(box_names))]
         
         # Setting headers for each box.
         # Time start of the session, duration of the session, number of go in/go out for this box
-        headers = ['Time start (s)', 'Duration (s)', f'Distance ({unit})']
+        headers = ['Time start (s)', 'Time start (f)', 'Duration (s)', 'Duration (f)', f'Distance ({unit})']
         status  = ['V', 'H']
         last    = '#I/O'
         nHeaders = len(box_names) * len(headers) * len(status) + len(box_names)
 
         # Searching for the maximum number of sessions.
-        max_sessions = int(np.ceil(float(np.max(in_out_count)) / 2.0)) + 1
+        max_count    = max([sessions[box]['count'] for box in sessions.keys()])
+        max_sessions = int(1 + math.ceil(float(max_count) / 2.0))
         
         # Settings rows headers.
         rowHeaders = [" ", " "] + [str(i+1) for i in range(max_sessions)]
@@ -184,15 +185,6 @@ class SessionsResultsTable(ResultsTable):
         self.table.setColumnCount(nHeaders)
         self.table.setRowCount(len(rowHeaders))
         self.table.setVerticalHeaderLabels(rowHeaders)
-
-        # From the first item of visibility, we determine if the first session is hidden or visible.
-        # 1 for visible, 0 for hidden.
-        sessions_location = [-1 for i in range(len(box_names))]
-        for box_idx in range(len(box_names)):
-            for i in range(len(visibility[box_idx])):
-                if visibility[box_idx][i] >= 0:
-                    sessions_location[box_idx] = visibility[box_idx][i]
-                    break
 
         # Filling the headers
         nBoxHeaders = len(headers) * len(status) + 1
@@ -212,44 +204,47 @@ class SessionsResultsTable(ResultsTable):
             item.setBackground(color)
             self.table.setItem(1, nBoxHeaders * box_index + nBoxHeaders - 1, item)
 
+        last_pos_by_column = [2 for _ in range(len(box_names) * nBoxHeaders)]
+        for box_idx in range(len(box_names)):
+            s     = sessions[box_idx]['sessions']
+            color = colors[box_idx]
+            for session_idx, session in enumerate(s):
+                start_frames     = int(session['start'])
+                start_seconds    = round(start_frames / fps, 2)
+                duration_frames  = int(session['duration'])
+                duration_seconds = round(duration_frames / fps, 2)
+                distance         = round(session['distance'], 2)
+                visible          = session['status']
+                shift            = 0 if visible > 0 else 1
+                col_index        = nBoxHeaders * box_idx + shift * len(headers)
 
-        # Filling the table.
-        last_pos_by_column = [2 for i in range(len(box_names)*nBoxHeaders)]
-        for session_idx in range(np.max(in_out_count)):
-            for box_idx in range(len(box_names)):
-                color = colors[box_idx]
-                # (frame_start, duration (s), duration (f), distance)
-                session = sessions[box_idx][session_idx]
-                try:
-                    f_frame = int(session[0])
-                except:
-                    continue
-                
-                session_visibility = visibility[box_idx][int(session[0])]
-                shift = 0 if session_visibility > 0 else 1
-                duration = round(session[1], 2)
-                col_index = nBoxHeaders * box_idx + shift * len(headers)
-                
-                item = QTableWidgetItem(str(int(f_frame/fps)))
+                item = QTableWidgetItem(str(start_seconds))
                 item.setBackground(color)
-                self.table.setItem(last_pos_by_column[col_index], col_index, item)
-                
-                item = QTableWidgetItem(str(duration))
+                self.table.setItem(last_pos_by_column[col_index+0], col_index+0, item)
+
+                item = QTableWidgetItem(str(start_frames))
                 item.setBackground(color)
                 self.table.setItem(last_pos_by_column[col_index+1], col_index+1, item)
 
-                item = QTableWidgetItem(str(round(session[3], 2)))
+                item = QTableWidgetItem(str(duration_seconds))
                 item.setBackground(color)
                 self.table.setItem(last_pos_by_column[col_index+2], col_index+2, item)
-                
-                last_pos_by_column[col_index]   += 1
-                last_pos_by_column[col_index+1] += 1
-                last_pos_by_column[col_index+2] += 1
+
+                item = QTableWidgetItem(str(duration_frames))
+                item.setBackground(color)
+                self.table.setItem(last_pos_by_column[col_index+3], col_index+3, item)
+
+                item = QTableWidgetItem(str(distance))
+                item.setBackground(color)
+                self.table.setItem(last_pos_by_column[col_index+4], col_index+4, item)
+
+                for i in range(5):
+                    last_pos_by_column[col_index+i] += 1
         
         # Filling the last column with the number of go in/out.
         for box_idx in range(len(box_names)):
             color = colors[box_idx]
-            item = QTableWidgetItem(str(in_out_count[box_idx]))
+            item = QTableWidgetItem(str(sessions[box_idx]['count']))
             item.setBackground(color)
             self.table.setItem(2, nBoxHeaders * box_idx + nBoxHeaders - 1, item)
 
@@ -269,15 +264,14 @@ def read_names(f_path):
 def main_sessions():
     from time import sleep
 
-    visibility   = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/visibility.npy"))
-    in_out_count = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/in_out_count.npy"))
-    sessions     = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/sessions.npy"))
-    centroids    = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/centroids.npy"))
-    colors       = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/colors.npy"))
+    visibility   = np.load("/media/benedetti/5B0AAEC37149070F/mice-videos/2084-2086-2104-2106-T0.tmp//visibility.npy")
+    sessions     = np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/sessions.npy")
+    # centroids    = np.squeeze(np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/centroids.npy"))
+    colors       = np.load("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/colors.npy")
     box_names    = read_names("/home/benedetti/Documents/projects/25-entry-exit-mouse-monitor/tmp/box_names.txt")
 
     app = QApplication([])
-    table = SessionsResultsTable((colors, in_out_count, sessions, box_names, visibility, "px"))
+    table = SessionsResultsTable((colors, sessions, box_names, visibility, "px"))
     table.set_exp_name("Nom de manip.mp4")
     table.show()
     app.exec_()

@@ -68,8 +68,6 @@ class MouseInOutWidget(QWidget):
         # |  0: Mouse not visible.
         # |  1: Mouse visible.
         self.visibility   = None
-        # Table containing the number of times the mouse entered and exited the box. [nBoxes] -> uint32
-        self.in_out_count = None
         # Table containing the sessions. [nBoxes, nSessions, 4] -> float
         # | [0] Frame at which the session starts.
         # | [1] Duration of the session in seconds.
@@ -85,6 +83,8 @@ class MouseInOutWidget(QWidget):
         self.temp_dir = None
         # Calibration of the image.
         self.calibration = None
+        # Length of a mouse in pixels
+        self.mouse_length_pxl = 0
         self.create_temp_dir()
 
         self.switch_log_file(os.path.join(self.temp_dir, datetime.now().strftime("%Y-%m-%dT%H%M")+".log"))
@@ -143,11 +143,14 @@ class MouseInOutWidget(QWidget):
         layout.addWidget(self.slider)
 
         # Slot d'entier
+        h_layout = QHBoxLayout()
+        frame_lbl = QLabel("Frame: ", self)
         self.frame_input = QSpinBox(self)
         self.frame_input.setValue(-1)
         self.frame_input.valueChanged.connect(self.on_spinbox_change)
-        self.frame_input.setPrefix("Frame: ")
-        layout.addWidget(self.frame_input)
+        h_layout.addWidget(frame_lbl)
+        h_layout.addWidget(self.frame_input)
+        layout.addLayout(h_layout)
 
         # Vertical spacing
         spacer = QWidget()
@@ -278,14 +281,54 @@ class MouseInOutWidget(QWidget):
         self.unitSelector.addItems(units)
         nav_layout.addWidget(self.unitSelector)
 
-        # Add the nav_layout to the calibration layout
-        self.calibrationLayout.addLayout(nav_layout)
-
         # Apply calibration button
         self.calibrationButton = QPushButton("📏 Apply calibration")
         self.calibrationButton.setFont(FONT)
         self.calibrationButton.clicked.connect(self.apply_calibration)
-        self.calibrationLayout.addWidget(self.calibrationButton)
+        nav_layout.addWidget(self.calibrationButton)
+
+        # Add the nav_layout to the calibration layout
+        self.calibrationLayout.addLayout(nav_layout)
+
+        size_layout = QHBoxLayout()
+
+        self.mouse_length = QSpinBox(self)
+        self.mouse_length.setValue(0)
+        self.mouse_length.setMaximum(1000000)
+        self.mouse_length.valueChanged.connect(self.update_mouse_length_from_number)
+        size_layout.addWidget(self.mouse_length)
+
+        self.mouse_length_label = QLabel("--- px", self)
+        self.mouse_length_label.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.mouse_length_label.setAlignment(Qt.AlignCenter)
+        size_layout.addWidget(self.mouse_length_label)
+
+        self.set_mouse_length_button = QPushButton("📏 Set mouse length", self)
+        self.set_mouse_length_button.setFont(FONT)
+        self.set_mouse_length_button.clicked.connect(self.update_mouse_length_from_line)
+        size_layout.addWidget(self.set_mouse_length_button)
+
+        self.calibrationLayout.addLayout(size_layout)
+
+        min_track_length = QHBoxLayout()
+
+        self.min_track_length_label = QLabel("Min track length: ", self)
+
+        self.min_track_length_factor = QSpinBox(self)
+        self.min_track_length_factor.setMaximum(1000000)
+        self.min_track_length_factor.setMinimum(1)
+        self.min_track_length_factor.setSingleStep(1)
+        self.min_track_length_factor.setSuffix(" %")
+
+        self.min_track_length_factor.valueChanged.connect(self.on_min_track_length_update)
+
+        self.min_track_length_display = QLabel("---", self)
+        self.min_track_length_factor.setValue(150)
+
+        min_track_length.addWidget(self.min_track_length_label)
+        min_track_length.addWidget(self.min_track_length_factor)
+        min_track_length.addWidget(self.min_track_length_display)
+        self.calibrationLayout.addLayout(min_track_length)
 
         self.calibrationGroup.setLayout(self.calibrationLayout)
         self.layout.addWidget(self.calibrationGroup)
@@ -294,20 +337,6 @@ class MouseInOutWidget(QWidget):
     def add_tracking_ui(self):
         group_box = QGroupBox("Tracking")
         layout = QVBoxLayout(group_box)
-
-        size_layout = QHBoxLayout()
-
-        self.set_min_area_button = QPushButton("📏 Set area", self)
-        self.set_min_area_button.setFont(FONT)
-        self.set_min_area_button.clicked.connect(self.set_min_area)
-        size_layout.addWidget(self.set_min_area_button)
-
-        self.min_area = QSpinBox(self)
-        self.min_area.setValue(0)
-        self.min_area.setMaximum(1000000)
-        size_layout.addWidget(self.min_area)
-
-        layout.addLayout(size_layout)
 
         self.extract_button = QPushButton("♻️ Clear background", self)
         self.extract_button.setFont(FONT)
@@ -351,7 +380,7 @@ class MouseInOutWidget(QWidget):
 
         self.layout.addWidget(group_box)
 
-    
+
     def apply_calibration(self):
         print("Applying calibration...")
         # Checking that there is an active layer and that is a shape layer containing a unique line.
@@ -396,12 +425,26 @@ class MouseInOutWidget(QWidget):
             if (state == Qt.Unchecked):
                 self.update_boxes()
 
-    def set_min_area(self):
+    def set_mouse_length(self, pxl_length):
+        self.mouse_length_pxl = pxl_length
+        calib = self.calibration
+        txt = f"{pxl_length} px"
+        if calib is not None:
+            length_physical = pxl_length * calib[0]
+            unit = calib[1]
+            txt = f"{length_physical:.1f} {unit}"
+        self.mouse_length_label.setText(txt)
+
+    def update_mouse_length_from_number(self):
+        pxl_length = int(self.mouse_length.value())
+        self.set_mouse_length(pxl_length)
+        self.on_min_track_length_update()
+
+    def update_mouse_length_from_line(self):
         """
-        Uses a polygon drawn by the user over the head of a mouse to define the minimal area to consider that a mouse is present.
-        When summoned, this function must find a shape layer as the active layer, and extract the area of the polygon.
-        The shape layer is then deleted.
-        The value extracted is not stored, it is written in the spinbox.
+        Uses a line or the value in the spinbox to determine a length in pixels that will be converted to physical units.
+        The length is used to determine the size of the mouse in pixels.
+        Later, a fraction of this length will be used to determine the minimum length of a path.
         """
         # Checking required ressources (media and shape layer).
         if (not self.mm.active) or (self.mm.get_n_sources() == 0):
@@ -435,18 +478,24 @@ class MouseInOutWidget(QWidget):
             self.logger.error("No data in the layer.")
             return
         
-        shape = active_layer.data[-1]
-        if len(shape) <= 2:
-            show_error("The shape must be a polygon.")
-            self.logger.error("The shape must be a polygon.")
+        types = active_layer.shape_type
+        if types != ['line']:
+            show_error("A line shape is expected.")
+            self.logger.error("A line shape is expected.")
             return
         
-        poly = Polygon(shape)
-        area_pixels = int(poly.area) # in number of pixels
-        self.min_area.setValue(area_pixels)
+        line = active_layer.data[0]
+        length_pxl = int(np.sqrt((line[0][0]-line[1][0])**2 + (line[0][1]-line[1][1])**2)) # in pixels
+        self.mouse_length.setValue(length_pxl)
 
-        del self.viewer.layers[active_layer.name]
+        shape_name = active_layer.name
         self.viewer.layers.selection.active = self.viewer.layers[MEDIA_LAYER]
+        
+        for layer in list(self.viewer.layers):
+            if layer.name == shape_name:
+                self.viewer.layers.remove(layer)
+        
+        self.mouse_length.setValue(length_pxl)
 
     def on_threshold_update(self, value):
         """
@@ -507,8 +556,8 @@ class MouseInOutWidget(QWidget):
         self.track_button.setEnabled(t)
         self.extract_button.setEnabled(t)
         self.threshold.setEnabled(t)
-        self.set_min_area_button.setEnabled(t)
-        self.min_area.setEnabled(t)
+        self.set_mouse_length_button.setEnabled(t)
+        self.mouse_length.setEnabled(t)
         self.no_path_checkbox.setEnabled(t)
         self.export_button.setEnabled(t)
         self.calibInput.setEnabled(t)
@@ -630,7 +679,7 @@ class MouseInOutWidget(QWidget):
 
         mask_path = self.mm.get_source_by_name(MICE_LABELS_LAYER)[0]
         areas = self.viewer.layers[AREAS_LAYER].data
-        ma = self.min_area.value()
+        ma = self.get_min_track_length_pxl()
         start = self.start
 
         self.mvp = QtWorkerMVP(mask_path, areas, ma, start, self.duration_to_frames())
@@ -639,7 +688,7 @@ class MouseInOutWidget(QWidget):
         self.thread.started.connect(self.mvp.run)
         self.thread.start()
 
-    def terminate_measures(self, visibility, in_out_count, sessions, centroids):
+    def terminate_measures(self, visibility, centroids, sessions):
         self.logger.info("Measures extracted.")
         show_info("Measures extracted!")
         self.pbr.close()
@@ -650,10 +699,9 @@ class MouseInOutWidget(QWidget):
 
         self.visibility   = visibility
         np.save(os.path.join(self.temp_dir, "visibility.npy"), visibility)
-        self.in_out_count = in_out_count
-        np.save(os.path.join(self.temp_dir, "in_out_count.npy"), in_out_count)
         self.sessions     = sessions
-        np.save(os.path.join(self.temp_dir, "sessions.npy"), sessions)
+        with open(os.path.join(self.temp_dir, "sessions.json"), 'w') as f:
+            json.dump(sessions, f)
         self.centroids    = centroids
         np.save(os.path.join(self.temp_dir, "centroids.npy"), centroids)
         self.update_boxes()
@@ -670,7 +718,7 @@ class MouseInOutWidget(QWidget):
             self.boxes
         ))
         fwrt.set_exp_name("frames-" + os.path.basename(self.mm.get_source_by_name(MEDIA_LAYER)[0]))
-        fwrt.export_table_to_csv(os.path.join(self.temp_dir, "frame_wise_results.csv"))
+        fwrt.export_table_to_csv(os.path.join(self.temp_dir, "framewise_results.csv"))
         fwrt.show()
         self.frames_results.append(fwrt)
 
@@ -679,7 +727,6 @@ class MouseInOutWidget(QWidget):
         unit = "px" if unit is None else str(unit)
         srt = SessionsResultsTable((
             colors, 
-            self.in_out_count, 
             sessions, 
             self.boxes, 
             self.visibility,
@@ -691,23 +738,37 @@ class MouseInOutWidget(QWidget):
         srt.show()
         self.sessions_results.append(srt)
 
+    def on_min_track_length_update(self):
+        min_len = self.get_min_track_length()
+        unit = self.calibration[1] if self.calibration is not None else "px"
+        self.min_track_length_display.setText(f"{min_len:.1f} {unit}")
+
+    def get_min_track_length(self):
+        val = self.mouse_length.value() * self.min_track_length_factor.value() / 100
+        if self.calibration is not None:
+            val *= self.calibration[0]
+        return val
+    
+    def get_min_track_length_pxl(self):
+        return self.mouse_length.value() * self.min_track_length_factor.value() / 100
+
     def calibrate_results(self):
         """
         Applies the calibration to the distance traveled by the mice, stored in the sessions table.
         """
         # Checking if the image is calibrated.
-        sessions = np.copy(self.sessions)
+        sessions = self.sessions.copy()
         if self.viewer.scale_bar.unit is None:
             show_warning("No calibration found, exporting distances in pixels.")
             self.logger.warning("No calibration found, exporting distances in pixels.")
             return sessions
         
         # Get the size of a pixel.
-        pixel_size = self.viewer.layers[MEDIA_LAYER].scale[0]
+        pixel_size = float(self.viewer.layers[MEDIA_LAYER].scale[0])
         show_info(f"Calibration found: XY={pixel_size} {self.viewer.scale_bar.unit}")
         for box in range(len(self.boxes)):
-            for session in range(np.max(self.in_out_count)+1):
-                sessions[box, session, 3] *= pixel_size
+            for session in sessions[box]['sessions']:
+                session['distance'] *= pixel_size
         
         return sessions
     
@@ -744,7 +805,6 @@ class MouseInOutWidget(QWidget):
         # Changer la couleur des boxes en fonction de la visibilité.
         if self.visibility is None:
             return
-        
         self.update_face_color()
         self.update_centroids()
         self.update_mice_path()
@@ -793,16 +853,18 @@ class MouseInOutWidget(QWidget):
                 continue
             # Finding the session index for this box.
             # A session starts at the first frame where the visibility is 1.
+            if self.mm.current_frame < self.sessions[lbl]['sessions'][0]['start']-1:
+                continue
             session_index = 0
-            while self.sessions[lbl, session_index][0] <= self.mm.current_frame:
+            while self.sessions[lbl]['sessions'][session_index]['start']-1 <= self.mm.current_frame:
                 session_index += 1
-                if session_index >= len(self.sessions[lbl]):
+                if session_index >= len(self.sessions[lbl]['sessions']):
                     break
             # Reading the duration in seconds and in frames.
             session_index -= 1
-            duration_f  = int(self.sessions[lbl, session_index][2])
-            frame_start = int(self.sessions[lbl, session_index][0])
-            path = smooth_path_2d(self.centroids[frame_start:frame_start+duration_f, lbl][::int(self.mm.get_fps()/6)])
+            duration_f  = int(self.sessions[lbl]['sessions'][session_index]['duration'])
+            frame_start = int(self.sessions[lbl]['sessions'][session_index]['start'])
+            path = smooth_path_2d(self.centroids[frame_start-1:frame_start-1+duration_f, lbl][::int(self.mm.get_fps()/3)])
             if len(path) < 3:
                 continue
             full_path.append(path)
