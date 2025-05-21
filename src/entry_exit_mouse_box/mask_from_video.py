@@ -6,7 +6,7 @@ import tifffile
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import time
-
+from skimage.morphology import binary_opening, binary_closing
 
 class MaskFromBackground(object):
     def __init__(self, input_video_path, output_video_path, ref, tr=75, st={}, r=None, frame_count=64):
@@ -62,7 +62,10 @@ class MaskFromBackground(object):
             for lbl, start in self.start.items():
                 if pos >= start:
                     mask[self.regions == lbl] = True
-            diff = np.logical_and(np.abs(bw_frame - self.reference) > self.threshold, mask)
+            mice = np.abs(bw_frame - self.reference) > self.threshold
+            mice  = binary_opening(mice, np.ones((3, 3), np.uint8))
+            mice  = binary_closing(mice, np.ones((3, 3), np.uint8))
+            diff = np.logical_and(mice > 0, mask)
             buffer_out.append(diff)
         return buffer_out
 

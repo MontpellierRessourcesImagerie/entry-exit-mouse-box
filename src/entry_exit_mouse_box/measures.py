@@ -83,11 +83,27 @@ class MiceVisibilityProcessor(object):
             distance += np.linalg.norm(points[i+1] - points[i])
         return distance
 
+    def smooth_centroids(self, window_size=5):
+        smoothed = np.full_like(self.instant_centroids, np.nan, dtype=np.float32)
+        N = self.instant_centroids.shape[0]
+        for box_rank in range(len(self.box_ids)):
+            half_w = window_size // 2
+            for i in range(N):
+                start = max(0, i - half_w)
+                end = min(N, i + half_w + 1)
+                window = self.instant_centroids[start:end, box_rank]
+                valid = (window >= 0).all(axis=1)
+                if valid.any():
+                    smoothed[i, box_rank] = window[valid].mean(axis=0)
+                else:
+                    smoothed[i, box_rank] = self.instant_centroids[i, box_rank]
+        self.instant_centroids = smoothed
+
     def filter_visibility(self):
         for box_rank in range(len(self.box_ids)):
             swaps = []
             first_frame = self.starting_frames[box_rank+1] - 1
-            last_frame_idx = min(first_frame + self.track_duration, self.n_frames-1)
+            last_frame_idx = min(first_frame + self.track_duration, self.n_frames)
             for f in range(self.n_frames):
                 if f < first_frame:
                     self.instant_visibility[box_rank, f] = -1
@@ -103,13 +119,12 @@ class MiceVisibilityProcessor(object):
                         continue
                     # We are in an unstable state.
                     if (self.get_session_length(box_rank, swaps[-1], f) < self.min_trk_length):
-                        swaps.append(f + (1 if (f < last_frame_idx-1) else 2))
+                        swaps.append(f+1) # (1 if (f < last_frame_idx-1) else 2)
                     else:
                         for i in range(swaps[0], swaps[-1]):
                             self.instant_visibility[box_rank, i] = 0
                             self.instant_centroids[i, box_rank] = (-1.0, -1.0)
                         swaps = [f+1]
-
 
     def split_frame_ranges(self, n_threads, n_frames):
         ranges = []
@@ -132,6 +147,7 @@ class MiceVisibilityProcessor(object):
             for future in futures:
                 future.result()
         print("(2/3) Processing number of in/out...")
+        self.smooth_centroids()
         self.filter_visibility()
         print("(3/3) Processing sessions time and distance...")
         self.process_sessions()

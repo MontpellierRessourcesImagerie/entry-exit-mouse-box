@@ -667,7 +667,8 @@ class MouseInOutWidget(QWidget):
             self.table.removeRow(row_count - 1)
             del(self.viewer.layers[self.boxes.pop()])
             self.logger.info(f"Box {row_count-1} removed.")
-            del(self.start[row_count-1])
+            if row_count-1 in self.start:
+                del(self.start[row_count-1])
 
     def extract_measures(self):
         self.set_active_ui(False)
@@ -864,7 +865,7 @@ class MouseInOutWidget(QWidget):
             session_index -= 1
             duration_f  = int(self.sessions[lbl]['sessions'][session_index]['duration'])
             frame_start = int(self.sessions[lbl]['sessions'][session_index]['start'])
-            path = smooth_path_2d(self.centroids[frame_start-1:frame_start-1+duration_f, lbl][::int(self.mm.get_fps()/3)])
+            path = self.centroids[frame_start-1:frame_start-1+duration_f, lbl][::int(self.mm.get_fps()/3)]
             if len(path) < 3:
                 continue
             full_path.append(path)
