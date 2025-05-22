@@ -70,6 +70,7 @@ class ResultsTable(QMainWindow):
 
         if not fileName:
             print("No file selected")
+            return
         
         self.export_table_to_csv(fileName)
 

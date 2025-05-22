@@ -558,6 +558,8 @@ class MouseInOutWidget(QWidget):
         self.threshold.setEnabled(t)
         self.set_mouse_length_button.setEnabled(t)
         self.mouse_length.setEnabled(t)
+        self.mouse_length_label.setEnabled(t)
+        self.min_track_length_factor.setEnabled(t)
         self.no_path_checkbox.setEnabled(t)
         self.export_button.setEnabled(t)
         self.calibInput.setEnabled(t)
@@ -588,10 +590,11 @@ class MouseInOutWidget(QWidget):
         """
         if self.mm.get_n_sources() == 0:
             return
-        self.start[row+1] = self.mm.current_frame
         if self.mm.current_frame + self.duration_to_frames() > self.mm.get_n_frames():
             show_warning("The duration of the experiment exceeds the total number of frames.")
             self.logger.warning("The duration of the experiment exceeds the total number of frames.")
+            return
+        self.start[row+1] = self.mm.current_frame
         button.setText(f"▸ {self.start[row+1]+1}")
         name = self.boxes[row]
         self.viewer.layers[name].editable = False
@@ -865,7 +868,7 @@ class MouseInOutWidget(QWidget):
             session_index -= 1
             duration_f  = int(self.sessions[lbl]['sessions'][session_index]['duration'])
             frame_start = int(self.sessions[lbl]['sessions'][session_index]['start'])
-            path = self.centroids[frame_start-1:frame_start-1+duration_f, lbl][::int(self.mm.get_fps()/3)]
+            path = self.centroids[frame_start:frame_start+duration_f, lbl][::int(self.mm.get_fps()/3)]
             if len(path) < 3:
                 continue
             full_path.append(path)

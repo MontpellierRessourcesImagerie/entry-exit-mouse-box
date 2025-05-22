@@ -65,6 +65,7 @@ class MiceVisibilityProcessor(object):
                 x = int(p.centroid[1])
                 self.instant_visibility[l-1, interval[0] + i] = 1
                 self.instant_centroids[interval[0] + i, l-1]  = (y, x)
+                # Export both arrays on the disk
         video_stream.release()
 
     def worker(self, thread_id):
@@ -104,12 +105,14 @@ class MiceVisibilityProcessor(object):
             swaps = []
             first_frame = self.starting_frames[box_rank+1] - 1
             last_frame_idx = min(first_frame + self.track_duration, self.n_frames)
-            for f in range(self.n_frames):
+            for f in range(self.n_frames-1):
                 if f < first_frame:
                     self.instant_visibility[box_rank, f] = -1
+                    self.instant_centroids[f, box_rank] = (-1.0, -1.0)
                     continue
                 if f >= last_frame_idx:
                     self.instant_visibility[box_rank, f] = -2
+                    self.instant_centroids[f, box_rank] = (-1.0, -1.0)
                     continue
                 # State transition, the next session starts at (f+1)
                 if (self.instant_visibility[box_rank, f] != self.instant_visibility[box_rank, f+1]) or (f == last_frame_idx-1):
@@ -119,12 +122,14 @@ class MiceVisibilityProcessor(object):
                         continue
                     # We are in an unstable state.
                     if (self.get_session_length(box_rank, swaps[-1], f) < self.min_trk_length):
-                        swaps.append(f+1) # (1 if (f < last_frame_idx-1) else 2)
+                        swaps.append(f+1)
                     else:
                         for i in range(swaps[0], swaps[-1]):
                             self.instant_visibility[box_rank, i] = 0
                             self.instant_centroids[i, box_rank] = (-1.0, -1.0)
                         swaps = [f+1]
+        np.save("/tmp/visibility-02.npy", self.instant_visibility)
+        np.save("/tmp/centroids-02.npy", self.instant_centroids)
 
     def split_frame_ranges(self, n_threads, n_frames):
         ranges = []
@@ -139,7 +144,6 @@ class MiceVisibilityProcessor(object):
 
         return ranges
 
-
     def start_processing(self, num_workers=N_THREADS):
         print("(1/3) Processing visibility...")
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
@@ -151,6 +155,8 @@ class MiceVisibilityProcessor(object):
         self.filter_visibility()
         print("(3/3) Processing sessions time and distance...")
         self.process_sessions()
+        np.save("/tmp/visibility-03.npy", self.instant_visibility)
+        np.save("/tmp/centroids-03.npy", self.instant_centroids)
     
     def process_sessions(self):
         """

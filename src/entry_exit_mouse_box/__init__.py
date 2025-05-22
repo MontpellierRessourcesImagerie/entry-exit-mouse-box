@@ -1,4 +1,4 @@
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 from entry_exit_mouse_box.media_manager import MediaManager
 from entry_exit_mouse_box.results_table import ResultsTable
