@@ -59,3 +59,7 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [tox]: https://tox.readthedocs.io/en/latest/
 [pip]: https://pypi.org/project/pip/
 [PyPI]: https://pypi.org/
+
+## Publications using this tool
+
+1. Vernus, B., Goustard, B., Chabi, B., Bertrand-Gaday, C., Maillet, H., Cash, M.K., Delobel, P., Cerda, S., Macart, M., Bonnieu, A., Darvesh, S., Chatonnet, A., 2026. [Sex-specific aggressive and emotional behavior in myostatin-deficient mice: Ratio of acylated versus unacylated ghrelin is reduced, but not correlated with butyrylcholinesterase activity level, however parvalbumin expression is lost in the habenular complex](https://doi.org/10.1016/j.cbi.2025.111813). Chemico-Biological Interactions 423, 111813. 
