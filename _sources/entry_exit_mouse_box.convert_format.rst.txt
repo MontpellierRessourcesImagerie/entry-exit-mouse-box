@@ -1,0 +1,7 @@
+entry\_exit\_mouse\_box.convert\_format module
+==============================================
+
+.. automodule:: entry_exit_mouse_box.convert_format
+   :members:
+   :undoc-members:
+   :show-inheritance:
