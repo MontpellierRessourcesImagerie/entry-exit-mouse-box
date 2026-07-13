@@ -1,14 +1,13 @@
 import cv2
 import os
 
-from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
-from PyQt5.QtCore import pyqtSignal
+from qtpy.QtCore import QObject, Signal
 
 # Worker to convert a file to AVI.
 
 class QtWorkerC2A(QObject):
 
-    file_ready = pyqtSignal(str)
+    file_ready = Signal(str)
 
     def __init__(self, in_path, out_path):
         super().__init__()
@@ -28,7 +27,7 @@ class QtWorkerC2A(QObject):
 
         width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps    = cap.get(cv2.CAP_PROP_FPS)
+        fps    = round(cap.get(cv2.CAP_PROP_FPS))
         codec  = 'MJPG'
 
         fourcc = cv2.VideoWriter_fourcc(*codec)

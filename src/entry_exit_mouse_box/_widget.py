@@ -1,33 +1,54 @@
-from typing import TYPE_CHECKING
-
 import os
-from PyQt5.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QSlider, QLineEdit,
-                             QSpinBox, QTableWidget, QTableWidgetItem, QColorDialog, QComboBox,
-                             QGroupBox, QLabel, QHeaderView, QFileDialog, QFrame, QCheckBox)
-
 import cv2
-import shutil
-from PyQt5.QtGui import QFont, QColor, QDoubleValidator
-from qtpy.QtCore import QThread, Qt, Signal, Slot
-
 import tifffile
 import json
 import numpy as np
 from skimage.draw import polygon
-from napari.utils.notifications import show_info, show_error, show_warning
 from napari.utils import progress
-from shapely.geometry import Polygon
 import tempfile
 from datetime import datetime
-
-# if TYPE_CHECKING:
 import napari
+from napari.utils.notifications import (
+    show_info, 
+    show_error, 
+    show_warning
+)
+from qtpy.QtWidgets import (
+    QWidget, 
+    QPushButton, 
+    QVBoxLayout, 
+    QHBoxLayout, 
+    QSlider, 
+    QLineEdit,
+    QSpinBox, 
+    QTableWidget, 
+    QTableWidgetItem, 
+    QColorDialog, 
+    QComboBox,
+    QGroupBox, 
+    QLabel, 
+    QHeaderView, 
+    QFileDialog, 
+    QFrame, 
+    QCheckBox
+)
+from qtpy.QtGui import (
+    QFont, 
+    QColor, 
+    QDoubleValidator
+)
+from qtpy.QtCore import (
+    QThread, 
+    Qt, 
+    Signal,
+    Slot
+)
 from entry_exit_mouse_box.media_manager import MediaManager
 from entry_exit_mouse_box.video_mean_processor import QtWorkerVMP
 from entry_exit_mouse_box.mask_from_video import QtWorkerMFV
 from entry_exit_mouse_box.convert_format import QtWorkerC2A
 from entry_exit_mouse_box.measures import QtWorkerMVP
-from entry_exit_mouse_box.utils import setup_logger, smooth_path_2d, apply_lut
+from entry_exit_mouse_box.utils import setup_logger, apply_lut
 from entry_exit_mouse_box.results_table import SessionsResultsTable, FrameWiseResultsTable
 
 

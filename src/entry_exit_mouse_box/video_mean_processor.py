@@ -5,6 +5,7 @@ import numpy as np
 import os
 import tifffile
 import time
+from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
 
 
 class VideoMeanProcessor(object):
@@ -68,13 +69,9 @@ class VideoMeanProcessor(object):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
-from PyQt5.QtCore import pyqtSignal
-
-
 class QtWorkerVMP(QObject):
 
-    bg_ready = pyqtSignal(np.ndarray, str)
+    bg_ready = Signal(np.ndarray, str)
 
     def __init__(self, video_path, shape):
         super().__init__()

@@ -120,7 +120,7 @@ class MediaManager:
 
         properties = {
             'total_frames': int(capture.get(cv2.CAP_PROP_FRAME_COUNT)),
-            'fps'         : capture.get(cv2.CAP_PROP_FPS),
+            'fps'         : round(capture.get(cv2.CAP_PROP_FPS)),
             'width'       : int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
             'height'      : int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         }

@@ -6,7 +6,8 @@ import tifffile
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import time
-from skimage.morphology import binary_opening, binary_closing
+from skimage.morphology import opening, closing
+from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
 
 class MaskFromBackground(object):
     def __init__(self, input_video_path, output_video_path, ref, tr=75, st={}, r=None, frame_count=64):
@@ -16,7 +17,7 @@ class MaskFromBackground(object):
         self.reference = ref
         self.video = cv2.VideoCapture(input_video_path)
         self.ttl_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = self.video.get(cv2.CAP_PROP_FPS)
+        fps = round(self.video.get(cv2.CAP_PROP_FPS))
         self.processed_frames = {}
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
@@ -63,8 +64,8 @@ class MaskFromBackground(object):
                 if pos >= start:
                     mask[self.regions == lbl] = True
             mice = np.abs(bw_frame - self.reference) > self.threshold
-            mice  = binary_opening(mice, np.ones((3, 3), np.uint8))
-            mice  = binary_closing(mice, np.ones((3, 3), np.uint8))
+            mice  = opening(mice, np.ones((3, 3), np.uint8))
+            mice  = closing(mice, np.ones((3, 3), np.uint8))
             diff = np.logical_and(mice > 0, mask)
             buffer_out.append(diff)
         return buffer_out
@@ -111,13 +112,9 @@ class MaskFromBackground(object):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
-from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
-from PyQt5.QtCore import pyqtSignal
-
-
 class QtWorkerMFV(QObject):
 
-    mask_ready = pyqtSignal(str)
+    mask_ready = Signal(str)
 
     def __init__(self, in_path, out_path, ref, t, s, r):
         super().__init__()

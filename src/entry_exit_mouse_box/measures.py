@@ -27,7 +27,7 @@ class MiceVisibilityProcessor(object):
         self.lock            = threading.Lock()
         self.labeled_boxes   = areas
         self.n_frames        = int(self.video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.fps             = self.video_stream.get(cv2.CAP_PROP_FPS)
+        self.fps             = round(self.video_stream.get(cv2.CAP_PROP_FPS))
         self.box_ids         = set([int(i) for i in np.unique(self.labeled_boxes) if int(i) != 0])
         self.current_frame   = 0
         self.min_trk_length  = ma
@@ -199,12 +199,11 @@ class MiceVisibilityProcessor(object):
 
 
 from qtpy.QtCore import QThread, QObject, QTimer, Qt, Signal, Slot
-from PyQt5.QtCore import pyqtSignal
 
 
 class QtWorkerMVP(QObject):
 
-    measures_ready = pyqtSignal(np.ndarray, np.ndarray, dict)
+    measures_ready = Signal(np.ndarray, np.ndarray, dict)
 
     def __init__(self, mask_path, areas, ma, start, duration):
         super().__init__()

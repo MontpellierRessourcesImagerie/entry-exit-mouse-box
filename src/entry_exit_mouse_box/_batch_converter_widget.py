@@ -1,6 +1,13 @@
 import os
-from qtpy.QtWidgets import (QWidget, QVBoxLayout, QLineEdit, QHBoxLayout,
-                            QPushButton, QFileDialog, QLabel)
+from qtpy.QtWidgets import (
+    QWidget, 
+    QVBoxLayout, 
+    QLineEdit, 
+    QHBoxLayout,
+    QPushButton, 
+    QFileDialog, 
+    QLabel
+)
 from qtpy.QtCore import QThread
 import napari
 from napari.utils import progress
